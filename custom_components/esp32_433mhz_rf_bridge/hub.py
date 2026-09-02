@@ -21,6 +21,7 @@ from .const import (
     ATTR_KIND,
     ATTR_PROTOCOL,
     CONF_FIRST_CHANNEL,
+    CONF_HARJU_SEND_SERVICE,
     CONF_RECEIVE_ENTITY,
     CONF_SEND_SERVICE,
     CONF_TRANSMITTER_ID,
@@ -256,7 +257,11 @@ class ESP32RFBridgeHub:
         selected_send_service = send_service
         if selected_send_service is None:
             selected_send_service = (
-                DEFAULT_HARJU_SEND_SERVICE
+                str(
+                    self._entry_value(
+                        CONF_HARJU_SEND_SERVICE, DEFAULT_HARJU_SEND_SERVICE
+                    )
+                )
                 if protocol == PROTOCOL_HARJU
                 else str(self._entry_value(CONF_SEND_SERVICE, DEFAULT_SEND_SERVICE))
             )
@@ -386,14 +391,20 @@ class ESP32RFBridgeHub:
         data = dict(self.entry.data)
         options = dict(self.entry.options)
         entry_changed = False
+        configured_actions = (
+            (CONF_SEND_SERVICE, NEXA_SEND_SERVICE_ALIASES, DEFAULT_SEND_SERVICE),
+            (
+                CONF_HARJU_SEND_SERVICE,
+                HARJU_SEND_SERVICE_ALIASES,
+                DEFAULT_HARJU_SEND_SERVICE,
+            ),
+        )
         for values in (data, options):
-            configured = values.get(CONF_SEND_SERVICE)
-            if (
-                configured in NEXA_SEND_SERVICE_ALIASES
-                and configured != DEFAULT_SEND_SERVICE
-            ):
-                values[CONF_SEND_SERVICE] = DEFAULT_SEND_SERVICE
-                entry_changed = True
+            for key, aliases, default in configured_actions:
+                configured = values.get(key)
+                if configured in aliases and configured != default:
+                    values[key] = default
+                    entry_changed = True
         if entry_changed:
             self.hass.config_entries.async_update_entry(
                 self.entry,
@@ -411,9 +422,26 @@ class ESP32RFBridgeHub:
             if record.protocol == PROTOCOL_HARJU
             else [primary_code]
         )
+        send_service = self._configured_send_service_for_record(record)
         for code in send_codes:
-            await self.async_send_code(code, record.send_service)
+            await self.async_send_code(code, send_service)
         await self.async_set_record_state(record, is_on)
+
+    def _configured_send_service_for_record(self, record: SwitchRecord) -> str:
+        """Return the current protocol action while preserving explicit overrides."""
+
+        if record.protocol == PROTOCOL_HARJU:
+            key = CONF_HARJU_SEND_SERVICE
+            default = DEFAULT_HARJU_SEND_SERVICE
+            aliases = HARJU_SEND_SERVICE_ALIASES
+        else:
+            key = CONF_SEND_SERVICE
+            default = DEFAULT_SEND_SERVICE
+            aliases = NEXA_SEND_SERVICE_ALIASES
+
+        if record.send_service not in aliases:
+            return record.send_service
+        return str(self._entry_value(key, default))
 
     async def async_set_record_state(
         self, record: SwitchRecord, is_on: bool | None

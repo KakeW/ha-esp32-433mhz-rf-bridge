@@ -8,6 +8,7 @@ LEGACY_DOMAIN = "esp32_valo_ohjaus"
 PLATFORMS = ["switch", "button", "text", "select", "sensor"]
 
 CONF_SEND_SERVICE = "send_service"
+CONF_HARJU_SEND_SERVICE = "harju_send_service"
 CONF_RECEIVE_ENTITY = "receive_entity"
 CONF_TRANSMITTER_ID = "transmitter_id"
 CONF_FIRST_CHANNEL = "first_channel"

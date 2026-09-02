@@ -92,15 +92,16 @@ services**.
 
 The setup and options flow contains:
 
-- **ESPHome send action**: the ESPHome action used for Nexa transmissions
+- **Nexa send action**: the ESPHome action used for Nexa transmissions
+- **Harju send action**: the ESPHome action used for Harju transmissions
 - **ESPHome received-code text sensor**: the entity that publishes received RF
   codes
 - **Transmitter ID**: the six-hex-digit Nexa transmitter identifier
 - **First virtual channel**: the first generated logical channel
 
-The send-action field searches Home Assistant's service registry and the
-receive field uses Home Assistant's entity picker. Harju switches use the Harju
-action selected by the integration's tested defaults.
+Both send-action fields search Home Assistant's service registry and the
+receive field uses Home Assistant's entity picker. The integration selects the
+correct action automatically for each switch protocol.
 
 The current example uses English identifiers throughout:
 

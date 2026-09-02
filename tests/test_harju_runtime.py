@@ -151,7 +151,7 @@ def make_record(
 
 def make_hub(record):
     instance = object.__new__(hub_module.ESP32RFBridgeHub)
-    instance.entry = types.SimpleNamespace(entry_id="test")
+    instance.entry = types.SimpleNamespace(entry_id="test", data={}, options={})
     instance.hass = types.SimpleNamespace()
     instance.store = FakeStore([record])
     instance._learn_target = None
@@ -579,9 +579,10 @@ def test_legacy_send_action_is_used_until_esp32_is_renamed() -> None:
 
 
 def test_legacy_action_references_are_normalized_in_storage() -> None:
-    """Stored switch and config references move to the current English action."""
+    """Stored Nexa and Harju config references move to current English actions."""
 
     legacy = "esphome.valojen_ohjaus_rf_send"
+    legacy_harju = "esphome.valojen_ohjaus_rf_send_harju"
     record = make_record(
         protocol_name=const.PROTOCOL_NEXA,
         on_code="66695AA6A555965A",
@@ -589,7 +590,10 @@ def test_legacy_action_references_are_normalized_in_storage() -> None:
     )
     record.send_service = legacy
     instance = make_hub(record)
-    instance.entry.data = {const.CONF_SEND_SERVICE: legacy}
+    instance.entry.data = {
+        const.CONF_SEND_SERVICE: legacy,
+        const.CONF_HARJU_SEND_SERVICE: legacy_harju,
+    }
     instance.entry.options = {}
     updates = []
     instance.hass.config_entries = types.SimpleNamespace(
@@ -601,6 +605,38 @@ def test_legacy_action_references_are_normalized_in_storage() -> None:
     assert record.send_service == const.DEFAULT_SEND_SERVICE
     assert instance.store.save_count == 1
     assert updates[0][1]["data"][const.CONF_SEND_SERVICE] == const.DEFAULT_SEND_SERVICE
+    assert (
+        updates[0][1]["data"][const.CONF_HARJU_SEND_SERVICE]
+        == const.DEFAULT_HARJU_SEND_SERVICE
+    )
+
+
+def test_each_protocol_uses_its_configured_send_action() -> None:
+    """Existing standard records follow the matching protocol action picker."""
+
+    record = make_record(
+        protocol_name=const.PROTOCOL_NEXA,
+        on_code="66695AA6A555965A",
+        off_code="66695AA6A555955A",
+    )
+    record.send_service = const.DEFAULT_SEND_SERVICE
+    instance = make_hub(record)
+    instance.entry.options = {
+        const.CONF_SEND_SERVICE: "esphome.custom_nexa_send",
+        const.CONF_HARJU_SEND_SERVICE: "esphome.custom_harju_send",
+    }
+
+    assert (
+        instance._configured_send_service_for_record(record)
+        == "esphome.custom_nexa_send"
+    )
+
+    record.protocol = const.PROTOCOL_HARJU
+    record.send_service = const.DEFAULT_HARJU_SEND_SERVICE
+    assert (
+        instance._configured_send_service_for_record(record)
+        == "esphome.custom_harju_send"
+    )
 
 
 if __name__ == "__main__":
@@ -626,4 +662,5 @@ if __name__ == "__main__":
     test_current_send_action_is_preferred_over_legacy_action()
     test_legacy_send_action_is_used_until_esp32_is_renamed()
     test_legacy_action_references_are_normalized_in_storage()
+    test_each_protocol_uses_its_configured_send_action()
     print("runtime assertions passed")

@@ -14,6 +14,7 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_FIRST_CHANNEL,
+    CONF_HARJU_SEND_SERVICE,
     CONF_LEGACY_ENTRY_ID,
     CONF_RECEIVE_ENTITY,
     CONF_SEND_SERVICE,
@@ -70,6 +71,7 @@ class ESP32RFBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         defaults = {
             CONF_NAME: DEFAULT_NAME,
             CONF_SEND_SERVICE: DEFAULT_SEND_SERVICE,
+            CONF_HARJU_SEND_SERVICE: DEFAULT_HARJU_SEND_SERVICE,
             CONF_RECEIVE_ENTITY: DEFAULT_RECEIVE_ENTITY,
             CONF_TRANSMITTER_ID: DEFAULT_TRANSMITTER_ID,
             CONF_FIRST_CHANNEL: DEFAULT_FIRST_CHANNEL,
@@ -80,7 +82,9 @@ class ESP32RFBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=_data_schema(
                 defaults,
                 send_service_options=_service_options(
-                    self.hass, defaults[CONF_SEND_SERVICE]
+                    self.hass,
+                    defaults[CONF_SEND_SERVICE],
+                    defaults[CONF_HARJU_SEND_SERVICE],
                 ),
             ),
             errors=errors,
@@ -142,6 +146,9 @@ class ESP32RFBridgeOptionsFlow(config_entries.OptionsFlow):
             CONF_SEND_SERVICE: self._current_value(
                 CONF_SEND_SERVICE, DEFAULT_SEND_SERVICE
             ),
+            CONF_HARJU_SEND_SERVICE: self._current_value(
+                CONF_HARJU_SEND_SERVICE, DEFAULT_HARJU_SEND_SERVICE
+            ),
             CONF_RECEIVE_ENTITY: self._current_value(
                 CONF_RECEIVE_ENTITY, DEFAULT_RECEIVE_ENTITY
             ),
@@ -159,7 +166,9 @@ class ESP32RFBridgeOptionsFlow(config_entries.OptionsFlow):
                 defaults,
                 include_name=False,
                 send_service_options=_service_options(
-                    self.hass, defaults[CONF_SEND_SERVICE]
+                    self.hass,
+                    defaults[CONF_SEND_SERVICE],
+                    defaults[CONF_HARJU_SEND_SERVICE],
                 ),
             ),
             errors=errors,
@@ -194,6 +203,19 @@ def _data_schema(
             )
         )
     )
+    schema[
+        vol.Required(
+            CONF_HARJU_SEND_SERVICE,
+            default=defaults[CONF_HARJU_SEND_SERVICE],
+        )
+    ] = selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=send_service_options or [defaults[CONF_HARJU_SEND_SERVICE]],
+            custom_value=True,
+            mode=selector.SelectSelectorMode.DROPDOWN,
+            sort=True,
+        )
+    )
     schema[vol.Required(CONF_RECEIVE_ENTITY, default=defaults[CONF_RECEIVE_ENTITY])] = (
         selector.EntitySelector()
     )
@@ -206,7 +228,7 @@ def _data_schema(
     return vol.Schema(schema)
 
 
-def _service_options(hass: Any, current: str) -> list[str]:
+def _service_options(hass: Any, *current: str) -> list[str]:
     """Return known Home Assistant services for the send action picker."""
 
     services = hass.services.async_services()
@@ -215,7 +237,7 @@ def _service_options(hass: Any, current: str) -> list[str]:
         for domain, domain_services in services.items()
         for service in domain_services
     }
-    options.add(current)
+    options.update(current)
     options.add(DEFAULT_SEND_SERVICE)
     options.add(DEFAULT_HARJU_SEND_SERVICE)
     return sorted(options)
@@ -233,6 +255,8 @@ def _validate_input(user_input: dict[str, Any]) -> dict[str, str]:
 
     if "." not in user_input[CONF_SEND_SERVICE]:
         errors[CONF_SEND_SERVICE] = "invalid_service"
+    if "." not in user_input[CONF_HARJU_SEND_SERVICE]:
+        errors[CONF_HARJU_SEND_SERVICE] = "invalid_service"
 
     receive_entity = user_input.get(CONF_RECEIVE_ENTITY, "")
     try:
