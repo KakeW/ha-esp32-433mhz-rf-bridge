@@ -1,0 +1,119 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "ESP32 433 MHz RF Bridge",
+        "description": "Configure the ESPHome action used to transmit RF codes and the text sensor used to receive RF codes.",
+        "data": {
+          "name": "Name",
+          "send_service": "ESPHome send action",
+          "receive_entity": "ESPHome received-code text sensor",
+          "transmitter_id": "Transmitter ID",
+          "first_channel": "First virtual channel"
+        }
+      },
+      "migrate": {
+        "title": "Migrate legacy installation",
+        "description": "A legacy installation named {legacy_title} was found. This one-time migration preserves RF switches, learned codes, entity IDs, devices, areas, and user customizations. The old config entry is removed after a successful migration.",
+        "data": {
+          "confirm": "Migrate the legacy installation"
+        }
+      }
+    },
+    "error": {
+      "invalid_service": "Use the format domain.service.",
+      "invalid_entity_id": "Use a valid entity ID, such as text_sensor.valojen_ohjaus_viimeisin_rf_koodi.",
+      "invalid_transmitter_id": "Use exactly 6 hexadecimal characters."
+    },
+    "abort": {
+      "already_configured": "ESP32 433 MHz RF Bridge is already configured.",
+      "legacy_not_found": "The legacy installation was not found.",
+      "migration_cancelled": "Migration was cancelled."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "ESP32 433 MHz RF Bridge",
+        "description": "Update the ESPHome action used to transmit RF codes and the text sensor used to receive RF codes.",
+        "data": {
+          "send_service": "ESPHome send action",
+          "receive_entity": "ESPHome received-code text sensor",
+          "transmitter_id": "Transmitter ID",
+          "first_channel": "First virtual channel"
+        }
+      }
+    },
+    "error": {
+      "invalid_service": "Use the format domain.service.",
+      "invalid_entity_id": "Use a valid entity ID, such as text_sensor.valojen_ohjaus_viimeisin_rf_koodi.",
+      "invalid_transmitter_id": "Use exactly 6 hexadecimal characters."
+    }
+  },
+  "services": {
+    "create_switch": {
+      "name": "Create RF switch",
+      "description": "Create a virtual RF switch with generated or explicit ON/OFF codes.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Name for the new switch entity."
+        },
+        "channel": {
+          "name": "Channel",
+          "description": "Optional virtual channel. If omitted, the next free channel is used."
+        },
+        "on_code": {
+          "name": "ON code",
+          "description": "Optional explicit RF ON code."
+        },
+        "off_code": {
+          "name": "OFF code",
+          "description": "Optional explicit RF OFF code."
+        },
+        "protocol": {
+          "name": "Protocol",
+          "description": "RF protocol to use for generated codes."
+        }
+      }
+    },
+    "learn_next": {
+      "name": "Learn next RF code",
+      "description": "Store the next received RF code as an ON or OFF listener for a switch.",
+      "fields": {
+        "entity_id": {
+          "name": "Entity",
+          "description": "Switch entity to teach."
+        },
+        "switch_id": {
+          "name": "Switch ID",
+          "description": "Stored switch ID. Usually entity_id is easier."
+        },
+        "kind": {
+          "name": "Kind",
+          "description": "Whether the next code should be stored as ON or OFF."
+        }
+      }
+    },
+    "receive_code": {
+      "name": "Receive RF code",
+      "description": "Process a received Nexa or Harju RF code from ESPHome.",
+      "fields": {
+        "code": {
+          "name": "Code",
+          "description": "Received RF code."
+        }
+      }
+    },
+    "send_code": {
+      "name": "Send RF code",
+      "description": "Transmit a raw RF code through the default ESPHome action.",
+      "fields": {
+        "code": {
+          "name": "Code",
+          "description": "RF code to transmit."
+        }
+      }
+    }
+  }
+}

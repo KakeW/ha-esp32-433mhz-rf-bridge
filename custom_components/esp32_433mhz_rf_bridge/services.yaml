@@ -1,0 +1,60 @@
+create_switch:
+  fields:
+    name:
+      required: true
+      selector:
+        text:
+    channel:
+      required: false
+      selector:
+        number:
+          min: 1
+          mode: box
+    on_code:
+      required: false
+      selector:
+        text:
+    off_code:
+      required: false
+      selector:
+        text:
+    protocol:
+      required: false
+      selector:
+        select:
+          options:
+            - "nexa"
+            - "harju"
+
+learn_next:
+  fields:
+    entity_id:
+      required: false
+      selector:
+        entity:
+          domain: switch
+    switch_id:
+      required: false
+      selector:
+        text:
+    kind:
+      required: true
+      selector:
+        select:
+          options:
+            - "on"
+            - "off"
+
+receive_code:
+  fields:
+    code:
+      required: true
+      selector:
+        text:
+
+send_code:
+  fields:
+    code:
+      required: true
+      selector:
+        text:
