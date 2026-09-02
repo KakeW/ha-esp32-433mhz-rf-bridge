@@ -43,6 +43,7 @@ from .protocol import ProtocolError
 LOGGER = logging.getLogger(__name__)
 
 ESP32RFBridgeConfigEntry = ConfigEntry[ESP32RFBridgeHub]
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
