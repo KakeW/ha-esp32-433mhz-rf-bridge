@@ -539,6 +539,70 @@ def test_invalid_pair_coded_noise_is_not_accepted_as_nexa_alias() -> None:
     assert record.incoming_off_codes == []
 
 
+def test_current_send_action_is_preferred_over_legacy_action() -> None:
+    """An upgraded ESPHome node wins even when a record contains the old action."""
+
+    record = make_record(
+        protocol_name=const.PROTOCOL_NEXA,
+        on_code="66695AA6A555965A",
+        off_code="66695AA6A555955A",
+    )
+    instance = make_hub(record)
+    available = {const.DEFAULT_SEND_SERVICE}
+    instance.hass.services = types.SimpleNamespace(
+        has_service=lambda domain, service: f"{domain}.{service}" in available
+    )
+
+    selected = instance._resolve_send_service("esphome.valojen_ohjaus_rf_send")
+
+    assert selected == const.DEFAULT_SEND_SERVICE
+
+
+def test_legacy_send_action_is_used_until_esp32_is_renamed() -> None:
+    """The English integration remains usable with the old ESPHome firmware."""
+
+    record = make_record(
+        protocol_name=const.PROTOCOL_HARJU,
+        on_code="111111011011110100000101",
+        off_code="111111110101011111010101",
+    )
+    instance = make_hub(record)
+    legacy = "esphome.valojen_ohjaus_rf_send_harju"
+    available = {legacy}
+    instance.hass.services = types.SimpleNamespace(
+        has_service=lambda domain, service: f"{domain}.{service}" in available
+    )
+
+    selected = instance._resolve_send_service(const.DEFAULT_HARJU_SEND_SERVICE)
+
+    assert selected == legacy
+
+
+def test_legacy_action_references_are_normalized_in_storage() -> None:
+    """Stored switch and config references move to the current English action."""
+
+    legacy = "esphome.valojen_ohjaus_rf_send"
+    record = make_record(
+        protocol_name=const.PROTOCOL_NEXA,
+        on_code="66695AA6A555965A",
+        off_code="66695AA6A555955A",
+    )
+    record.send_service = legacy
+    instance = make_hub(record)
+    instance.entry.data = {const.CONF_SEND_SERVICE: legacy}
+    instance.entry.options = {}
+    updates = []
+    instance.hass.config_entries = types.SimpleNamespace(
+        async_update_entry=lambda entry, **changes: updates.append((entry, changes))
+    )
+
+    asyncio.run(instance._normalize_esphome_action_references())
+
+    assert record.send_service == const.DEFAULT_SEND_SERVICE
+    assert instance.store.save_count == 1
+    assert updates[0][1]["data"][const.CONF_SEND_SERVICE] == const.DEFAULT_SEND_SERVICE
+
+
 if __name__ == "__main__":
     test_all_harju_on_variants_update_one_switch()
     test_all_harju_off_variants_update_one_switch()
@@ -559,4 +623,7 @@ if __name__ == "__main__":
     test_two_nexa_transmitters_trigger_same_logical_off_action()
     test_nexa_text_sensor_result_does_not_depend_on_rcswitch_protocol()
     test_invalid_pair_coded_noise_is_not_accepted_as_nexa_alias()
+    test_current_send_action_is_preferred_over_legacy_action()
+    test_legacy_send_action_is_used_until_esp32_is_renamed()
+    test_legacy_action_references_are_normalized_in_storage()
     print("runtime assertions passed")

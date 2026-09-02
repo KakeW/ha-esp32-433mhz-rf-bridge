@@ -22,7 +22,7 @@
     },
     "error": {
       "invalid_service": "Use the format domain.service.",
-      "invalid_entity_id": "Use a valid entity ID, such as text_sensor.valojen_ohjaus_viimeisin_rf_koodi.",
+      "invalid_entity_id": "Use a valid entity ID, such as sensor.esp32_433mhz_rf_bridge_last_rf_code.",
       "invalid_transmitter_id": "Use exactly 6 hexadecimal characters."
     },
     "abort": {
@@ -46,7 +46,7 @@
     },
     "error": {
       "invalid_service": "Use the format domain.service.",
-      "invalid_entity_id": "Use a valid entity ID, such as text_sensor.valojen_ohjaus_viimeisin_rf_koodi.",
+      "invalid_entity_id": "Use a valid entity ID, such as sensor.esp32_433mhz_rf_bridge_last_rf_code.",
       "invalid_transmitter_id": "Use exactly 6 hexadecimal characters."
     }
   },

@@ -70,7 +70,7 @@ def _record_sensors(
             hub,
             record,
             key="incoming_on_codes",
-            name="Kuunneltavat ON-koodit",
+            name="Incoming ON codes",
             value_getter=lambda: ", ".join(record.incoming_on_codes)
             or "No learned ON codes",
         ),
@@ -78,7 +78,7 @@ def _record_sensors(
             hub,
             record,
             key="incoming_off_codes",
-            name="Kuunneltavat OFF-koodit",
+            name="Incoming OFF codes",
             value_getter=lambda: ", ".join(record.incoming_off_codes)
             or "No learned OFF codes",
         ),

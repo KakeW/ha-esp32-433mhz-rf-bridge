@@ -28,6 +28,9 @@ outlet itself does not send state feedback.
 
 The included ESPHome configuration is hardware-specific. Verify the board,
 pins, radio module and secrets before flashing it to another device.
+[`examples/secrets.example.yaml`](examples/secrets.example.yaml) lists the
+required secret names. Reuse the existing ESPHome API encryption key when
+renaming an installed device.
 
 ## Install with HACS
 
@@ -57,9 +60,8 @@ installed and configured.
    installation**.
 4. Confirm the migration and wait for the new integration to load.
 5. Verify that the existing switches still work and retain their entity IDs.
-6. Update the direct Home Assistant action in the ESPHome YAML from
-   `esp32_valo_ohjaus.receive_code` to
-   `esp32_433mhz_rf_bridge.receive_code`, then flash ESPHome again.
+6. Follow **Rename an existing ESPHome node** below, then install the current
+   example YAML.
 7. Remove `/config/custom_components/esp32_valo_ohjaus` only after the new
    integration works and Home Assistant has been restarted successfully.
 
@@ -100,17 +102,33 @@ The send-action field searches Home Assistant's service registry and the
 receive field uses Home Assistant's entity picker. Harju switches use the Harju
 action selected by the integration's tested defaults.
 
-The tested ESPHome node and action IDs are retained in the example for a
-non-disruptive migration. The legacy receive entity was:
+The current example uses English identifiers throughout:
 
 ```text
-Nexa send action:  esphome.valojen_ohjaus_rf_send
-Harju send action: esphome.valojen_ohjaus_rf_send_harju
-Legacy receive entity: text_sensor.valojen_ohjaus_viimeisin_rf_koodi
+ESPHome node:       esp32-433mhz-rf-bridge
+Nexa send action:  esphome.esp32_433mhz_rf_bridge_send_nexa_rf_code
+Harju send action: esphome.esp32_433mhz_rf_bridge_send_harju_rf_code
+Receive entity:    sensor.esp32_433mhz_rf_bridge_last_rf_code
 ```
 
 Select the actual entities and actions shown by your ESPHome device. Their IDs
 can differ depending on the ESPHome node name and Home Assistant entity naming.
+
+### Rename an existing ESPHome node
+
+Do not replace `name: valojen-ohjaus` and immediately run a normal OTA install:
+the new hostname does not exist until that first upload succeeds.
+
+In ESPHome Device Builder, open the existing device menu and choose **Rename
+device**. Rename it from `valojen-ohjaus` to `esp32-433mhz-rf-bridge`. The online
+rename flow compiles the new configuration and uploads it to the old address.
+After the rename finishes, replace the configuration with
+`examples/esphome-esp32-433mhz-rf-bridge.yaml` and run a normal wireless install.
+Rename the existing API-key entry in `secrets.yaml` to
+`esp32_433mhz_rf_bridge_api_key`, but keep its value unchanged.
+
+The integration recognizes the old and version 1.0 ESPHome action names during
+this transition, but stores the current English action names going forward.
 
 ## Create an RF switch
 

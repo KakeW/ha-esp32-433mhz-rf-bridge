@@ -1,5 +1,5 @@
 esphome:
-  name: valojen-ohjaus
+  name: esp32-433mhz-rf-bridge
   friendly_name: ESP32 433 MHz RF Bridge
 
 esp32:
@@ -44,10 +44,10 @@ sensor:
 
 api:
   encryption:
-    key: !secret api_key
+    key: !secret esp32_433mhz_rf_bridge_api_key
 
   actions:
-    - action: rf_send
+    - action: send_nexa_rf_code
       variables:
         code: string
       then:
@@ -82,7 +82,7 @@ api:
               times: 5
               wait_time: 0ms
 
-    - action: rf_send_harju
+    - action: send_harju_rf_code
       variables:
         code: string
       then:
@@ -125,7 +125,7 @@ remote_receiver:
       - lambda: |-
           id(decoded_rf_code_valid) = false;
           char status[96];
-          snprintf(status, sizeof(status), "Raakapulsseja: %u", (unsigned) x.size());
+          snprintf(status, sizeof(status), "Raw pulses: %u", (unsigned) x.size());
           id(rf_debug_status) = std::string(status);
 
           auto abs_duration = [](int value) -> int {
@@ -201,7 +201,7 @@ remote_receiver:
           }
 
           if (x.size() < 128) {
-            snprintf(status, sizeof(status), "Liian lyhyt: %u pulssia", (unsigned) x.size());
+            snprintf(status, sizeof(status), "Too short: %u pulses", (unsigned) x.size());
             id(rf_debug_status) = std::string(status);
             return;
           }
@@ -212,7 +212,7 @@ remote_receiver:
             start = 2;
           }
           if (x.size() - start < 128) {
-            snprintf(status, sizeof(status), "Liian lyhyt synkan jalkeen: %u pulssia", (unsigned) (x.size() - start));
+            snprintf(status, sizeof(status), "Too short after sync: %u pulses", (unsigned) (x.size() - start));
             id(rf_debug_status) = std::string(status);
             return;
           }
@@ -226,7 +226,7 @@ remote_receiver:
 
             if (mark < 100 || mark > 500) {
               if (bit == 0 && mark > 800) {
-                id(rf_debug_status) = "RCSwitch-koodi kasitellaan erikseen";
+                id(rf_debug_status) = "RCSwitch code handled separately";
                 return;
               }
               snprintf(status, sizeof(status), "Nexa: invalid mark at bit %u: %d us", (unsigned) bit, mark);
@@ -272,6 +272,7 @@ remote_transmitter:
   pin: GPIO3
   carrier_duty_percent: 100%
   rmt_symbols: 48
+  non_blocking: true
 
   on_transmit:
     then:

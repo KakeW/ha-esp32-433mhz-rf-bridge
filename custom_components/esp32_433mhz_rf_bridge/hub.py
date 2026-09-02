@@ -32,8 +32,10 @@ from .const import (
     DEFAULT_TRANSMITTER_ID,
     DOMAIN,
     EVENT_RF_RECEIVED,
+    HARJU_SEND_SERVICE_ALIASES,
     LEARN_OFF,
     LEARN_ON,
+    NEXA_SEND_SERVICE_ALIASES,
     PROTOCOL_HARJU,
     PROTOCOL_NEXA,
 )
@@ -126,6 +128,7 @@ class ESP32RFBridgeHub:
         """Load storage and start event listeners."""
 
         await self.store.async_load()
+        await self._normalize_esphome_action_references()
         bridge_device = dr.async_get(self.hass).async_get_or_create(
             config_entry_id=self.entry.entry_id,
             identifiers={(DOMAIN, self.entry.entry_id)},
@@ -334,7 +337,10 @@ class ESP32RFBridgeHub:
         """Send an RF code through the configured ESPHome action."""
 
         normalized = normalize_rf_code(code)
-        service_ref = send_service or self._entry_value(CONF_SEND_SERVICE, DEFAULT_SEND_SERVICE)
+        service_ref = send_service or self._entry_value(
+            CONF_SEND_SERVICE, DEFAULT_SEND_SERVICE
+        )
+        service_ref = self._resolve_send_service(str(service_ref))
         try:
             domain, service = str(service_ref).split(".", 1)
         except ValueError as err:
@@ -348,6 +354,52 @@ class ESP32RFBridgeHub:
             {ATTR_CODE: normalized},
             blocking=True,
         )
+
+    def _resolve_send_service(self, configured_service: str) -> str:
+        """Prefer the current English ESPHome action, with legacy fallbacks."""
+
+        for aliases in (NEXA_SEND_SERVICE_ALIASES, HARJU_SEND_SERVICE_ALIASES):
+            if configured_service not in aliases:
+                continue
+            for service_ref in aliases:
+                domain, service = service_ref.split(".", 1)
+                if self.hass.services.has_service(domain, service):
+                    return service_ref
+        return configured_service
+
+    async def _normalize_esphome_action_references(self) -> None:
+        """Store current English ESPHome action names without breaking upgrades."""
+
+        records_changed = False
+        for record in self.store.records.values():
+            aliases = (
+                HARJU_SEND_SERVICE_ALIASES
+                if record.protocol == PROTOCOL_HARJU
+                else NEXA_SEND_SERVICE_ALIASES
+            )
+            if record.send_service in aliases and record.send_service != aliases[0]:
+                record.send_service = aliases[0]
+                records_changed = True
+        if records_changed:
+            await self.store.async_save()
+
+        data = dict(self.entry.data)
+        options = dict(self.entry.options)
+        entry_changed = False
+        for values in (data, options):
+            configured = values.get(CONF_SEND_SERVICE)
+            if (
+                configured in NEXA_SEND_SERVICE_ALIASES
+                and configured != DEFAULT_SEND_SERVICE
+            ):
+                values[CONF_SEND_SERVICE] = DEFAULT_SEND_SERVICE
+                entry_changed = True
+        if entry_changed:
+            self.hass.config_entries.async_update_entry(
+                self.entry,
+                data=data,
+                options=options,
+            )
 
     async def async_turn_record(self, record: SwitchRecord, is_on: bool) -> None:
         """Transmit a switch command and update inferred state."""
@@ -811,7 +863,7 @@ class ESP32RFBridgeHub:
         if entity_id == configured_entity_id:
             return True
 
-        if not entity_id.startswith("text_sensor."):
+        if not entity_id.startswith(("sensor.", "text_sensor.")):
             return False
 
         if RF_CODE_SEARCH_RE.search(new_state.state) is None:
