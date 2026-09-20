@@ -14,6 +14,9 @@ CONF_TRANSMIT_SERVICE = "transmit_service"
 CONF_TRANSMITTER_ID = "transmitter_id"
 CONF_FIRST_CHANNEL = "first_channel"
 CONF_LEGACY_ENTRY_ID = "legacy_entry_id"
+CONF_CONTROL_ORDER_VERSION = "control_order_version"
+
+CONTROL_ORDER_VERSION = 1
 
 DEFAULT_NAME = "ESP32 433 MHz RF Bridge"
 DEFAULT_TRANSMIT_SERVICE = "esphome.esp32_433mhz_rf_bridge_transmit_rf"

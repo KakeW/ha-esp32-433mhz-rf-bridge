@@ -20,12 +20,14 @@ from .const import (
     ATTR_CODE,
     ATTR_KIND,
     ATTR_PROTOCOL,
+    CONF_CONTROL_ORDER_VERSION,
     CONF_FIRST_CHANNEL,
     CONF_HARJU_SEND_SERVICE,
     CONF_RECEIVE_ENTITY,
     CONF_SEND_SERVICE,
     CONF_TRANSMIT_SERVICE,
     CONF_TRANSMITTER_ID,
+    CONTROL_ORDER_VERSION,
     DEFAULT_HARJU_SEND_SERVICE,
     DEFAULT_FIRST_CHANNEL,
     DEFAULT_RECEIVE_ENTITY,
@@ -149,6 +151,7 @@ class ESP32RFBridgeHub:
         self._cleanup_deprecated_status_sensors()
         self._cleanup_harju_learning_entities()
         self._cleanup_orphaned_switch_registry_entries()
+        self._migrate_bridge_control_order()
         self._unsubscribers.append(
             self.hass.bus.async_listen(EVENT_RF_RECEIVED, self._async_event_received)
         )
@@ -988,6 +991,32 @@ class ESP32RFBridgeHub:
                 or entity_entry.unique_id.endswith(("_test_on", "_test_off"))
             ):
                 registry.async_remove(entity_entry.entity_id)
+
+    def _migrate_bridge_control_order(self) -> None:
+        """Recreate bridge controls once in their intended display order."""
+
+        current_version = int(
+            self.entry.data.get(CONF_CONTROL_ORDER_VERSION, 0)
+        )
+        if current_version >= CONTROL_ORDER_VERSION:
+            return
+
+        registry = er.async_get(self.hass)
+        control_unique_ids = {
+            f"{DOMAIN}_{self.entry.entry_id}_new_switch_protocol",
+            f"{DOMAIN}_{self.entry.entry_id}_new_switch_name",
+            f"{DOMAIN}_{self.entry.entry_id}_learn_nexa_all_off",
+            f"{DOMAIN}_{self.entry.entry_id}_create_switch",
+        }
+        for entity_entry in er.async_entries_for_config_entry(
+            registry, self.entry.entry_id
+        ):
+            if entity_entry.unique_id in control_unique_ids:
+                registry.async_remove(entity_entry.entity_id)
+
+        data = dict(self.entry.data)
+        data[CONF_CONTROL_ORDER_VERSION] = CONTROL_ORDER_VERSION
+        self.hass.config_entries.async_update_entry(self.entry, data=data)
 
     def _cleanup_record_delete_buttons(self) -> None:
         """Recreate delete buttons so they are added after other record buttons."""

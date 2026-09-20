@@ -707,6 +707,56 @@ def test_v1_record_preserves_learned_codes_and_polarity() -> None:
     assert record.state is False
 
 
+def test_bridge_control_order_migration_only_recreates_creation_controls() -> None:
+    """The order migration leaves outlet entities and learned codes untouched."""
+
+    record = make_record(
+        protocol_name=const.PROTOCOL_NEXA,
+        on_code="66695AA6A555965A",
+        off_code="66695AA6A555955A",
+    )
+    instance = make_hub(record)
+    instance.entry.data = {}
+    removed = []
+    updates = []
+    entries = [
+        types.SimpleNamespace(
+            entity_id="button.create_new_outlet",
+            unique_id=f"{const.DOMAIN}_test_create_switch",
+        ),
+        types.SimpleNamespace(
+            entity_id="select.new_outlet_type",
+            unique_id=f"{const.DOMAIN}_test_new_switch_protocol",
+        ),
+        types.SimpleNamespace(
+            entity_id="switch.existing_outlet",
+            unique_id=f"{const.DOMAIN}_{record.id}",
+        ),
+    ]
+    registry = types.SimpleNamespace(
+        async_remove=lambda entity_id: removed.append(entity_id)
+    )
+    original_get = hub_module.er.async_get
+    original_entries = hub_module.er.async_entries_for_config_entry
+    hub_module.er.async_get = lambda _hass: registry
+    hub_module.er.async_entries_for_config_entry = lambda *_args: entries
+    instance.hass.config_entries = types.SimpleNamespace(
+        async_update_entry=lambda entry, **changes: updates.append(changes)
+    )
+    try:
+        instance._migrate_bridge_control_order()
+    finally:
+        hub_module.er.async_get = original_get
+        hub_module.er.async_entries_for_config_entry = original_entries
+
+    assert removed == [
+        "button.create_new_outlet",
+        "select.new_outlet_type",
+    ]
+    assert updates[0]["data"][const.CONF_CONTROL_ORDER_VERSION] == 1
+    assert record.id in instance.store.records
+
+
 def test_harju_transmit_codes_can_be_swapped_without_changing_learned_codes() -> None:
     """A different Harju outlet polarity can be corrected per switch."""
 
@@ -790,6 +840,7 @@ if __name__ == "__main__":
     test_each_protocol_uses_its_configured_send_action()
     test_v2_transmit_action_receives_protocol_and_code()
     test_v1_record_preserves_learned_codes_and_polarity()
+    test_bridge_control_order_migration_only_recreates_creation_controls()
     test_harju_transmit_codes_can_be_swapped_without_changing_learned_codes()
     test_user_selected_harju_polarity_survives_startup_repair()
     print("runtime assertions passed")

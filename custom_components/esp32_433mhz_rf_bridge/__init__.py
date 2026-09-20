@@ -140,13 +140,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ESP32RFBridgeConfigEntry
     """Set up ESP32 433 MHz RF Bridge from a config entry."""
 
     await async_migrate_legacy_installation(hass, entry)
-    entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     hub = ESP32RFBridgeHub(hass, entry)
     await hub.async_setup()
     entry.runtime_data = hub
-    await hass.config_entries.async_forward_entry_setups(
-        entry, [Platform(platform) for platform in PLATFORMS]
-    )
+    for platform in PLATFORMS:
+        await hass.config_entries.async_forward_entry_setups(
+            entry, [Platform(platform)]
+        )
+    entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     return True
 
 
