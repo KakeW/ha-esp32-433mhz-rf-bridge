@@ -145,6 +145,7 @@ class ESP32RFBridgeHub:
         self._cleanup_record_delete_buttons()
         self._cleanup_deprecated_receive_select()
         self._cleanup_deprecated_status_sensors()
+        self._cleanup_harju_learning_entities()
         self._cleanup_orphaned_switch_registry_entries()
         self._unsubscribers.append(
             self.hass.bus.async_listen(EVENT_RF_RECEIVED, self._async_event_received)
@@ -989,6 +990,38 @@ class ESP32RFBridgeHub:
             registry, self.entry.entry_id
         ):
             if entity_entry.unique_id in deprecated_unique_ids:
+                registry.async_remove(entity_entry.entity_id)
+
+    def _cleanup_harju_learning_entities(self) -> None:
+        """Remove remote-learning entities that do not apply to Harju outlets."""
+
+        registry = er.async_get(self.hass)
+        harju_record_ids = {
+            record.id
+            for record in self.store.records.values()
+            if record.protocol == PROTOCOL_HARJU
+        }
+        global_unique_id = f"{DOMAIN}_{self.entry.entry_id}_learn_harju_all_off"
+        learning_suffixes = (
+            "_learn_on",
+            "_learn_off",
+            "_clear_on",
+            "_clear_off",
+            "_incoming_on_codes",
+            "_incoming_off_codes",
+        )
+
+        for entity_entry in er.async_entries_for_config_entry(
+            registry, self.entry.entry_id
+        ):
+            unique_id = entity_entry.unique_id
+            if not unique_id:
+                continue
+            record_id = self._record_id_from_unique_id(unique_id)
+            if unique_id == global_unique_id or (
+                record_id in harju_record_ids
+                and unique_id.endswith(learning_suffixes)
+            ):
                 registry.async_remove(entity_entry.entity_id)
 
     def _cleanup_orphaned_switch_registry_entries(self) -> None:

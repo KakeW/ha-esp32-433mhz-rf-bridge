@@ -5,7 +5,7 @@ from __future__ import annotations
 DOMAIN = "esp32_433mhz_rf_bridge"
 LEGACY_DOMAIN = "esp32_valo_ohjaus"
 
-PLATFORMS = ["switch", "button", "text", "select", "sensor"]
+PLATFORMS = ["select", "text", "button", "switch", "sensor"]
 
 CONF_SEND_SERVICE = "send_service"
 CONF_HARJU_SEND_SERVICE = "harju_send_service"

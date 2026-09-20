@@ -25,9 +25,8 @@ async def async_setup_entry(
     hub = entry.runtime_data
     known_ids = set(hub.store.records)
     entities: list[ButtonEntity] = [
-        CreateSwitchButton(hub),
         LearnAllOffButton(hub, PROTOCOL_NEXA, "Learn Nexa all off"),
-        LearnAllOffButton(hub, PROTOCOL_HARJU, "Learn Harju all off"),
+        CreateSwitchButton(hub),
     ]
     for record in hub.store.records.values():
         entities.extend(_record_buttons(hub, record))
@@ -50,36 +49,44 @@ def _record_buttons(
 ) -> list[ButtonEntity]:
     """Return helper buttons for one RF switch."""
 
-    buttons: list[ButtonEntity] = [
-        RecordActionButton(
-            hub,
-            record,
-            key="learn_on",
-            label="Add incoming ON code",
-            action=lambda: hub.async_arm_learning(record.id, LEARN_ON),
-        ),
-        RecordActionButton(
-            hub,
-            record,
-            key="learn_off",
-            label="Add incoming OFF code",
-            action=lambda: hub.async_arm_learning(record.id, LEARN_OFF),
-        ),
-        RecordActionButton(
-            hub,
-            record,
-            key="clear_on",
-            label="Clear incoming ON codes",
-            action=lambda: hub.async_clear_learned_codes(record.id, LEARN_ON),
-        ),
-        RecordActionButton(
-            hub,
-            record,
-            key="clear_off",
-            label="Clear incoming OFF codes",
-            action=lambda: hub.async_clear_learned_codes(record.id, LEARN_OFF),
-        ),
-    ]
+    buttons: list[ButtonEntity] = []
+    if record.protocol == PROTOCOL_NEXA:
+        buttons.extend(
+            [
+                RecordActionButton(
+                    hub,
+                    record,
+                    key="learn_on",
+                    label="Add incoming ON code",
+                    action=lambda: hub.async_arm_learning(record.id, LEARN_ON),
+                ),
+                RecordActionButton(
+                    hub,
+                    record,
+                    key="learn_off",
+                    label="Add incoming OFF code",
+                    action=lambda: hub.async_arm_learning(record.id, LEARN_OFF),
+                ),
+                RecordActionButton(
+                    hub,
+                    record,
+                    key="clear_on",
+                    label="Clear incoming ON codes",
+                    action=lambda: hub.async_clear_learned_codes(
+                        record.id, LEARN_ON
+                    ),
+                ),
+                RecordActionButton(
+                    hub,
+                    record,
+                    key="clear_off",
+                    label="Clear incoming OFF codes",
+                    action=lambda: hub.async_clear_learned_codes(
+                        record.id, LEARN_OFF
+                    ),
+                ),
+            ]
+        )
     if record.protocol == PROTOCOL_HARJU:
         buttons.append(
             RecordActionButton(
@@ -121,7 +128,7 @@ class CreateSwitchButton(BaseButton):
         """Initialize the button."""
 
         super().__init__(hub)
-        self._attr_name = "Create RF switch"
+        self._attr_name = "Create new outlet"
         self._attr_unique_id = f"{DOMAIN}_{hub.entry.entry_id}_create_switch"
 
     async def async_press(self) -> None:

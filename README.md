@@ -120,6 +120,10 @@ opposite polarity. Each Harju switch device therefore includes a **Swap
 transmitted ON/OFF codes** button. It changes only commands sent to the outlet;
 learned remote-control codes are left unchanged.
 
+Harju outlets are exposed as Home Assistant-only controls. Remote-learning
+buttons and learned-code sensors are only created for Nexa switches. The bridge
+creation controls are presented as outlet type, outlet name, and create outlet.
+
 ### Rename an existing ESPHome node
 
 Do not replace `name: valojen-ohjaus` and immediately run a normal OTA install:

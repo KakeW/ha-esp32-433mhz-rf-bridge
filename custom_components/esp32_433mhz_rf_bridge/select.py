@@ -28,7 +28,7 @@ class NewSwitchProtocolSelect(SelectEntity):
     """Select the RF protocol used for the next created switch."""
 
     _attr_has_entity_name = False
-    _attr_name = "New RF switch protocol"
+    _attr_name = "New outlet type"
     _attr_options = list(PROTOCOL_LABELS.values())
 
     def __init__(self, hub: ESP32RFBridgeHub) -> None:

@@ -28,7 +28,7 @@ class NewSwitchNameText(TextEntity):
     """Editable name for the next created RF switch."""
 
     _attr_has_entity_name = False
-    _attr_name = "New RF switch name"
+    _attr_name = "New outlet name"
     _attr_native_max = 80
 
     def __init__(self, hub: ESP32RFBridgeHub) -> None:
