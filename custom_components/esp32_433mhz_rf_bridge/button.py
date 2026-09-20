@@ -50,7 +50,7 @@ def _record_buttons(
 ) -> list[ButtonEntity]:
     """Return helper buttons for one RF switch."""
 
-    return [
+    buttons: list[ButtonEntity] = [
         RecordActionButton(
             hub,
             record,
@@ -79,14 +79,27 @@ def _record_buttons(
             label="Clear incoming OFF codes",
             action=lambda: hub.async_clear_learned_codes(record.id, LEARN_OFF),
         ),
+    ]
+    if record.protocol == PROTOCOL_HARJU:
+        buttons.append(
+            RecordActionButton(
+                hub,
+                record,
+                key="swap_transmit_codes",
+                label="Swap transmitted ON/OFF codes",
+                action=lambda: hub.async_swap_transmit_codes(record.id),
+            )
+        )
+    buttons.append(
         RecordActionButton(
             hub,
             record,
             key="delete",
             label="Delete RF switch",
             action=lambda: hub.async_delete_record(record.id),
-        ),
-    ]
+        )
+    )
+    return buttons
 
 
 class BaseButton(ButtonEntity):

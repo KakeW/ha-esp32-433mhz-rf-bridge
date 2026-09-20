@@ -115,6 +115,11 @@ Receive entity:    sensor.esp32_433mhz_rf_bridge_last_rf_code
 Select the actual entities and actions shown by your ESPHome device. Their IDs
 can differ depending on the ESPHome node name and Home Assistant entity naming.
 
+Some Harju outlet revisions interpret generated ON/OFF command pairs with the
+opposite polarity. Each Harju switch device therefore includes a **Swap
+transmitted ON/OFF codes** button. It changes only commands sent to the outlet;
+learned remote-control codes are left unchanged.
+
 ### Rename an existing ESPHome node
 
 Do not replace `name: valojen-ohjaus` and immediately run a normal OTA install:

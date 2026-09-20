@@ -27,6 +27,7 @@ class SwitchRecord:
     off_codes: list[str] = field(default_factory=list)
     incoming_on_codes: list[str] = field(default_factory=list)
     incoming_off_codes: list[str] = field(default_factory=list)
+    transmit_codes_swapped: bool = False
     state: bool | None = None
 
     @classmethod
@@ -47,6 +48,7 @@ class SwitchRecord:
             off_codes=_unique_codes(data.get("off_codes", [off_code]), off_code),
             incoming_on_codes=list(data.get("incoming_on_codes", [])),
             incoming_off_codes=list(data.get("incoming_off_codes", [])),
+            transmit_codes_swapped=bool(data.get("transmit_codes_swapped", False)),
             state=data.get("state"),
         )
 

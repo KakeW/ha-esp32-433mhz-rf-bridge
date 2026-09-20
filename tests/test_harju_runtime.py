@@ -639,6 +639,63 @@ def test_each_protocol_uses_its_configured_send_action() -> None:
     )
 
 
+def test_harju_transmit_codes_can_be_swapped_without_changing_learned_codes() -> None:
+    """A different Harju outlet polarity can be corrected per switch."""
+
+    record = make_record(
+        protocol_name=const.PROTOCOL_HARJU,
+        on_code="111111110101011111010011",
+        off_code="111111011011110100000011",
+        on_codes=["111111110101011111010011", "111111110101011111010001"],
+        off_codes=["111111011011110100000011", "111111011011110100000001"],
+    )
+    record.incoming_on_codes = ["111110111010101100011100"]
+    record.incoming_off_codes = ["111110101100010011000101"]
+    record.state = False
+    instance = make_hub(record)
+
+    asyncio.run(instance.async_swap_transmit_codes(record.id))
+
+    assert record.on_code == "111111011011110100000011"
+    assert record.off_code == "111111110101011111010011"
+    assert record.on_codes == [
+        "111111011011110100000011",
+        "111111011011110100000001",
+    ]
+    assert record.off_codes == [
+        "111111110101011111010011",
+        "111111110101011111010001",
+    ]
+    assert record.incoming_on_codes == ["111110111010101100011100"]
+    assert record.incoming_off_codes == ["111110101100010011000101"]
+    assert record.transmit_codes_swapped is True
+    assert record.state is None
+    assert instance.store.save_count == 1
+
+    asyncio.run(instance.async_swap_transmit_codes(record.id))
+    assert record.transmit_codes_swapped is False
+    assert record.on_code == "111111110101011111010011"
+
+
+def test_user_selected_harju_polarity_survives_startup_repair() -> None:
+    """Startup migration must not undo a user-selected transmit polarity."""
+
+    generated = protocol.generate_harju_code_pair(4)
+    record = make_record(
+        protocol_name=const.PROTOCOL_HARJU,
+        on_code=generated.off_code,
+        off_code=generated.on_code,
+    )
+    record.transmit_codes_swapped = True
+    instance = make_hub(record)
+
+    asyncio.run(instance._repair_harju_generated_polarity())
+
+    assert record.on_code == generated.off_code
+    assert record.off_code == generated.on_code
+    assert instance.store.save_count == 0
+
+
 if __name__ == "__main__":
     test_all_harju_on_variants_update_one_switch()
     test_all_harju_off_variants_update_one_switch()
@@ -663,4 +720,6 @@ if __name__ == "__main__":
     test_legacy_send_action_is_used_until_esp32_is_renamed()
     test_legacy_action_references_are_normalized_in_storage()
     test_each_protocol_uses_its_configured_send_action()
+    test_harju_transmit_codes_can_be_swapped_without_changing_learned_codes()
+    test_user_selected_harju_polarity_survives_startup_repair()
     print("runtime assertions passed")

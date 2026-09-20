@@ -315,6 +315,22 @@ class ESP32RFBridgeHub:
         await self.store.async_save()
         async_dispatcher_send(self.hass, self.signal_update, record_id)
 
+    async def async_swap_transmit_codes(self, record_id: str) -> None:
+        """Swap a Harju switch's transmitted ON and OFF commands."""
+
+        record = self.store.records.get(record_id)
+        if record is None:
+            raise HomeAssistantError("Unknown RF switch")
+        if record.protocol != PROTOCOL_HARJU:
+            raise HomeAssistantError("Transmit polarity can only be swapped for Harju")
+
+        record.on_code, record.off_code = record.off_code, record.on_code
+        record.on_codes, record.off_codes = record.off_codes, record.on_codes
+        record.transmit_codes_swapped = not record.transmit_codes_swapped
+        record.state = None
+        await self.store.async_save()
+        async_dispatcher_send(self.hass, self.signal_update, record_id)
+
     async def async_create_next_switch(self) -> SwitchRecord:
         """Create a switch with the next virtual channel and GUI-provided name."""
 
@@ -1077,6 +1093,7 @@ class ESP32RFBridgeHub:
             record.off_code = pair.off_code
             record.on_codes = self._initial_command_codes(PROTOCOL_HARJU, pair.on_code)
             record.off_codes = self._initial_command_codes(PROTOCOL_HARJU, pair.off_code)
+            record.transmit_codes_swapped = False
             seen_pairs.add(candidate_key)
             changed = True
 
@@ -1088,7 +1105,11 @@ class ESP32RFBridgeHub:
 
         changed = False
         for record in self.store.records.values():
-            if record.protocol != PROTOCOL_HARJU or record.channel == 2:
+            if (
+                record.protocol != PROTOCOL_HARJU
+                or record.channel == 2
+                or record.transmit_codes_swapped
+            ):
                 continue
 
             expected_pair = generate_harju_code_pair(record.channel)

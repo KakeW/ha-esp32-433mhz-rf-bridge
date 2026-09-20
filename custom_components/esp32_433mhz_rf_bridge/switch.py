@@ -70,6 +70,7 @@ class ESP32RFBridgeSwitch(SwitchEntity):
             "off_code": self.record.off_code,
             "on_codes": self.record.on_codes,
             "off_codes": self.record.off_codes,
+            "transmit_codes_swapped": self.record.transmit_codes_swapped,
         }
 
     @property
