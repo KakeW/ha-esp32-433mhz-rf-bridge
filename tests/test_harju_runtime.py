@@ -206,7 +206,7 @@ def test_harju_tx_sends_all_four_variants() -> None:
     instance = make_hub(record)
     sent: list[str] = []
 
-    async def send_code(code: str, _service: str) -> None:
+    async def send_code(code: str, _service: str, _protocol: str) -> None:
         sent.append(code)
 
     async def set_state(_record, is_on: bool) -> None:
@@ -231,7 +231,7 @@ def test_harju_off_tx_sends_all_four_variants() -> None:
     instance = make_hub(record)
     sent: list[str] = []
 
-    async def send_code(code: str, _service: str) -> None:
+    async def send_code(code: str, _service: str, _protocol: str) -> None:
         sent.append(code)
 
     async def set_state(_record, is_on: bool) -> None:
@@ -348,7 +348,7 @@ def test_nexa_tx_and_rx_remain_single_code() -> None:
     instance = make_hub(record)
     sent: list[str] = []
 
-    async def send_code(code: str, _service: str) -> None:
+    async def send_code(code: str, _service: str, _protocol: str) -> None:
         sent.append(code)
 
     async def set_state(_record, is_on: bool) -> None:
@@ -639,6 +639,74 @@ def test_each_protocol_uses_its_configured_send_action() -> None:
     )
 
 
+def test_v2_transmit_action_receives_protocol_and_code() -> None:
+    """V2 sends both protocol and code through one ESPHome action."""
+
+    record = make_record(
+        protocol_name=const.PROTOCOL_HARJU,
+        on_code="111111011011110100000101",
+        off_code="111111110101011111010101",
+    )
+    instance = make_hub(record)
+    calls = []
+
+    async def async_call(domain, service, data, *, blocking):
+        calls.append((domain, service, data, blocking))
+
+    instance.hass.services = types.SimpleNamespace(
+        has_service=lambda domain, service: (
+            f"{domain}.{service}" == const.DEFAULT_TRANSMIT_SERVICE
+        ),
+        async_call=async_call,
+    )
+
+    asyncio.run(
+        instance.async_send_code(
+            record.on_code,
+            const.DEFAULT_HARJU_SEND_SERVICE,
+            const.PROTOCOL_HARJU,
+        )
+    )
+
+    assert calls == [
+        (
+            "esphome",
+            "esp32_433mhz_rf_bridge_transmit_rf",
+            {
+                const.ATTR_PROTOCOL: const.PROTOCOL_HARJU,
+                const.ATTR_CODE: record.on_code,
+            },
+            True,
+        )
+    ]
+
+
+def test_v1_record_preserves_learned_codes_and_polarity() -> None:
+    """Loading V1 storage does not require relearning or repairing polarity."""
+
+    record = store.SwitchRecord.from_dict(
+        {
+            "id": "existing-outlet",
+            "name": "Patio",
+            "channel": 8,
+            "on_code": "111111011011110100000101",
+            "off_code": "111111110101011111010101",
+            "protocol": const.PROTOCOL_HARJU,
+            "send_service": const.DEFAULT_HARJU_SEND_SERVICE,
+            "incoming_on_codes": ["111110111010101100011100"],
+            "incoming_off_codes": ["111110101100010011000101"],
+            "transmit_codes_swapped": True,
+            "state": False,
+        }
+    )
+
+    assert record.id == "existing-outlet"
+    assert record.incoming_on_codes == ["111110111010101100011100"]
+    assert record.incoming_off_codes == ["111110101100010011000101"]
+    assert record.transmit_codes_swapped is True
+    assert record.state is False
+
+
 def test_harju_transmit_codes_can_be_swapped_without_changing_learned_codes() -> None:
     """A different Harju outlet polarity can be corrected per switch."""
 
@@ -720,6 +788,8 @@ if __name__ == "__main__":
     test_legacy_send_action_is_used_until_esp32_is_renamed()
     test_legacy_action_references_are_normalized_in_storage()
     test_each_protocol_uses_its_configured_send_action()
+    test_v2_transmit_action_receives_protocol_and_code()
+    test_v1_record_preserves_learned_codes_and_polarity()
     test_harju_transmit_codes_can_be_swapped_without_changing_learned_codes()
     test_user_selected_harju_polarity_survives_startup_repair()
     print("runtime assertions passed")

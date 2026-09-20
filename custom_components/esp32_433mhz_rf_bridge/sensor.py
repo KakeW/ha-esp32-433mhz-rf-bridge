@@ -10,7 +10,8 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, PROTOCOL_HARJU
+from .capabilities import capabilities_for
+from .const import DOMAIN
 from .hub import ESP32RFBridgeHub
 from .store import SwitchRecord
 
@@ -65,7 +66,7 @@ def _record_sensors(
 ) -> list[SensorEntity]:
     """Return learned-code sensors for one RF switch."""
 
-    if record.protocol == PROTOCOL_HARJU:
+    if not capabilities_for(record.protocol).learn_remote:
         return []
 
     return [

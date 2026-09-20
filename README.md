@@ -8,11 +8,10 @@ outdoor outlets. It provides:
 
 - one Home Assistant switch and device per RF-controlled outlet
 - generated Nexa or Harju transmit codes
-- searchable ESPHome action and receive-entity selectors
-- learning of multiple incoming ON and OFF codes per switch
-- separate Nexa and Harju all-off learning
+- one searchable ESPHome V2 transmit-action selector
+- learning of multiple incoming Nexa ON and OFF codes per switch
+- Nexa all-off learning
 - inferred switch state updates when a physical remote is used
-- known four-code command-family handling for the tested Harju remote
 - deletion of switches and learned-code lists from the device page
 
 The displayed state is inferred from transmitted and received RF commands. The
@@ -44,6 +43,30 @@ renaming an installed device.
    **ESP32 433 MHz RF Bridge**.
 
 HACS manages future integration updates after this installation.
+
+## Upgrade from integration V1 to V2
+
+V2 keeps the existing Home Assistant storage key, switch record IDs, generated
+transmit codes, learned Nexa codes, inferred states and Harju polarity setting.
+No outlet pairing or remote learning is required again.
+
+The upgrade can be installed in either order:
+
+1. Update the Home Assistant integration. Until the firmware is updated, it
+   automatically falls back to the two V1 protocol-specific ESPHome actions.
+2. Replace the ESPHome configuration with the current file in `examples/` and
+   install it. The firmware exposes the unified `transmit_rf` V2 action and
+   retains the two V1 actions as compatibility aliases.
+3. Restart Home Assistant or reload both ESPHome and ESP32 433 MHz RF Bridge.
+4. Open the integration options and confirm that **ESPHome transmit action** is
+   `esphome.esp32_433mhz_rf_bridge_transmit_rf`.
+5. Test one existing Nexa outlet, one existing Harju outlet and a Nexa remote
+   command before creating new outlets.
+
+The V2 firmware sends received Nexa codes directly to Home Assistant. It no
+longer exposes the old `Last RF code` entity as a second receive path. Harju
+remote reception is intentionally disabled because Harju outlets are managed as
+Home Assistant-only controls.
 
 ## Migrate from ESP32 valo-ohjaus
 
@@ -92,24 +115,21 @@ services**.
 
 The setup and options flow contains:
 
-- **Nexa send action**: the ESPHome action used for Nexa transmissions
-- **Harju send action**: the ESPHome action used for Harju transmissions
-- **ESPHome received-code text sensor**: the entity that publishes received RF
-  codes
+- **ESPHome transmit action**: the unified V2 action used for Nexa and Harju
+  transmissions
 - **Transmitter ID**: the six-hex-digit Nexa transmitter identifier
 - **First virtual channel**: the first generated logical channel
 
-Both send-action fields search Home Assistant's service registry and the
-receive field uses Home Assistant's entity picker. The integration selects the
-correct action automatically for each switch protocol.
+The transmit-action field searches Home Assistant's action registry. The
+integration passes the correct protocol and code automatically for each outlet.
+Nexa receive codes are delivered directly from ESPHome to the integration, so
+there is no separate receive-entity setting in V2.
 
 The current example uses English identifiers throughout:
 
 ```text
-ESPHome node:       esp32-433mhz-rf-bridge
-Nexa send action:  esphome.esp32_433mhz_rf_bridge_send_nexa_rf_code
-Harju send action: esphome.esp32_433mhz_rf_bridge_send_harju_rf_code
-Receive entity:    sensor.esp32_433mhz_rf_bridge_last_rf_code
+ESPHome node:      esp32-433mhz-rf-bridge
+Transmit action:  esphome.esp32_433mhz_rf_bridge_transmit_rf
 ```
 
 Select the actual entities and actions shown by your ESPHome device. Their IDs
@@ -137,8 +157,10 @@ After the rename finishes, replace the configuration with
 Rename the existing API-key entry in `secrets.yaml` to
 `esp32_433mhz_rf_bridge_api_key`, but keep its value unchanged.
 
-The integration recognizes the old and version 1.0 ESPHome action names during
-this transition, but stores the current English action names going forward.
+The integration recognizes the two V1 ESPHome transmit actions during the V2
+transition. The example firmware also keeps those actions as aliases. Existing
+outlets, generated transmit codes, learned Nexa codes, entity IDs and device
+IDs remain unchanged when upgrading from integration V1 to V2.
 
 ## Create an RF switch
 
@@ -179,30 +201,17 @@ Several physical remote codes can be attached to one logical switch. Use
 **Clear incoming ON codes** or **Clear incoming OFF codes** if a code was learned
 in the wrong direction.
 
-The main bridge device provides separate **Learn Nexa all off** and **Learn
-Harju all off** controls. An all-off code is added only to switches that use the
-same protocol.
+The main bridge device provides **Learn Nexa all off**. Harju outlets are
+Home Assistant-only controls and do not expose remote-learning actions.
 
 For Nexa, learning finishes after the first valid pair-coded command. Learning
 an ON code removes the same code from the switch's learned OFF list, and vice
 versa.
 
-For the tested Harju remote, one button cycles through four 24-bit variants. A
-known variant is expanded to its complete command family. Unknown valid Harju
-codes are stored exactly as received; the integration does not guess missing
-variants.
-
 ## Receive RF codes
 
-The integration accepts a Nexa 16-character hexadecimal code or a Harju 24-bit
-binary code from the configured entity. A changing suffix is allowed, for
-example:
-
-```text
-66695AA6A5559655 @ 123456
-```
-
-The included ESPHome YAML also calls the integration action directly:
+The V2 firmware decodes Nexa 16-character hexadecimal codes, removes duplicate
+RF repeats from one button press, and calls the integration action directly:
 
 ```yaml
 action: esp32_433mhz_rf_bridge.receive_code

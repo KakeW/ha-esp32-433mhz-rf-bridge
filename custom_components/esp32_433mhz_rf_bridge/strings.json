@@ -3,12 +3,10 @@
     "step": {
       "user": {
         "title": "ESP32 433 MHz RF Bridge",
-        "description": "Configure the ESPHome actions used to transmit Nexa and Harju RF codes and the entity used to receive RF codes.",
+        "description": "Configure the unified ESPHome V2 action used to transmit RF codes. Received Nexa codes are delivered directly by the bridge.",
         "data": {
           "name": "Name",
-          "send_service": "Nexa send action",
-          "harju_send_service": "Harju send action",
-          "receive_entity": "ESPHome received-code text sensor",
+          "transmit_service": "ESPHome transmit action",
           "transmitter_id": "Transmitter ID",
           "first_channel": "First virtual channel"
         }
@@ -36,11 +34,9 @@
     "step": {
       "init": {
         "title": "ESP32 433 MHz RF Bridge",
-        "description": "Update the ESPHome actions used to transmit Nexa and Harju RF codes and the entity used to receive RF codes.",
+        "description": "Update the unified ESPHome V2 action used to transmit Nexa and Harju RF codes.",
         "data": {
-          "send_service": "Nexa send action",
-          "harju_send_service": "Harju send action",
-          "receive_entity": "ESPHome received-code text sensor",
+          "transmit_service": "ESPHome transmit action",
           "transmitter_id": "Transmitter ID",
           "first_channel": "First virtual channel"
         }
@@ -109,11 +105,15 @@
     },
     "send_code": {
       "name": "Send RF code",
-      "description": "Transmit a raw RF code through the default ESPHome action.",
+      "description": "Transmit an RF code through the unified ESPHome action.",
       "fields": {
         "code": {
           "name": "Code",
           "description": "RF code to transmit."
+        },
+        "protocol": {
+          "name": "Protocol",
+          "description": "Protocol used to validate and transmit the RF code."
         }
       }
     }

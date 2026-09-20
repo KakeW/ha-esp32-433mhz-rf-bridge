@@ -58,3 +58,11 @@ send_code:
       required: true
       selector:
         text:
+    protocol:
+      required: false
+      default: "nexa"
+      selector:
+        select:
+          options:
+            - "nexa"
+            - "harju"

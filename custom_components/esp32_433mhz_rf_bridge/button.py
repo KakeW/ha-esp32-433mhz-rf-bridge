@@ -10,7 +10,8 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, LEARN_OFF, LEARN_ON, PROTOCOL_HARJU, PROTOCOL_NEXA
+from .capabilities import capabilities_for
+from .const import DOMAIN, LEARN_OFF, LEARN_ON, PROTOCOL_NEXA
 from .hub import ESP32RFBridgeHub
 from .store import SwitchRecord
 
@@ -50,7 +51,8 @@ def _record_buttons(
     """Return helper buttons for one RF switch."""
 
     buttons: list[ButtonEntity] = []
-    if record.protocol == PROTOCOL_NEXA:
+    capabilities = capabilities_for(record.protocol)
+    if capabilities.learn_remote:
         buttons.extend(
             [
                 RecordActionButton(
@@ -87,7 +89,7 @@ def _record_buttons(
                 ),
             ]
         )
-    if record.protocol == PROTOCOL_HARJU:
+    if capabilities.swap_transmit_polarity:
         buttons.append(
             RecordActionButton(
                 hub,

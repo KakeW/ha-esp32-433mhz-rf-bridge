@@ -18,12 +18,14 @@ from .const import (
     CONF_LEGACY_ENTRY_ID,
     CONF_RECEIVE_ENTITY,
     CONF_SEND_SERVICE,
+    CONF_TRANSMIT_SERVICE,
     CONF_TRANSMITTER_ID,
     DEFAULT_FIRST_CHANNEL,
     DEFAULT_HARJU_SEND_SERVICE,
     DEFAULT_NAME,
     DEFAULT_RECEIVE_ENTITY,
     DEFAULT_SEND_SERVICE,
+    DEFAULT_TRANSMIT_SERVICE,
     DEFAULT_TRANSMITTER_ID,
     DOMAIN,
     LEGACY_DOMAIN,
@@ -34,7 +36,7 @@ from .protocol import ProtocolError, normalize_transmitter_id
 class ESP32RFBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for ESP32 433 MHz RF Bridge."""
 
-    VERSION = 1
+    VERSION = 2
 
     @staticmethod
     @callback
@@ -70,9 +72,7 @@ class ESP32RFBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         defaults = {
             CONF_NAME: DEFAULT_NAME,
-            CONF_SEND_SERVICE: DEFAULT_SEND_SERVICE,
-            CONF_HARJU_SEND_SERVICE: DEFAULT_HARJU_SEND_SERVICE,
-            CONF_RECEIVE_ENTITY: DEFAULT_RECEIVE_ENTITY,
+            CONF_TRANSMIT_SERVICE: DEFAULT_TRANSMIT_SERVICE,
             CONF_TRANSMITTER_ID: DEFAULT_TRANSMITTER_ID,
             CONF_FIRST_CHANNEL: DEFAULT_FIRST_CHANNEL,
         }
@@ -82,9 +82,7 @@ class ESP32RFBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=_data_schema(
                 defaults,
                 send_service_options=_service_options(
-                    self.hass,
-                    defaults[CONF_SEND_SERVICE],
-                    defaults[CONF_HARJU_SEND_SERVICE],
+                    self.hass, defaults[CONF_TRANSMIT_SERVICE]
                 ),
             ),
             errors=errors,
@@ -111,6 +109,7 @@ class ESP32RFBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 title=DEFAULT_NAME,
                 data={
                     **legacy_entry.data,
+                    CONF_TRANSMIT_SERVICE: DEFAULT_TRANSMIT_SERVICE,
                     CONF_LEGACY_ENTRY_ID: legacy_entry.entry_id,
                 },
             )
@@ -140,17 +139,21 @@ class ESP32RFBridgeOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             errors = _validate_input(user_input)
             if not errors:
-                return self.async_create_entry(title="", data=user_input)
+                hidden_legacy_values = {
+                    key: self._current_value(key, default)
+                    for key, default in (
+                        (CONF_SEND_SERVICE, DEFAULT_SEND_SERVICE),
+                        (CONF_HARJU_SEND_SERVICE, DEFAULT_HARJU_SEND_SERVICE),
+                        (CONF_RECEIVE_ENTITY, DEFAULT_RECEIVE_ENTITY),
+                    )
+                }
+                return self.async_create_entry(
+                    title="", data={**hidden_legacy_values, **user_input}
+                )
 
         defaults = {
-            CONF_SEND_SERVICE: self._current_value(
-                CONF_SEND_SERVICE, DEFAULT_SEND_SERVICE
-            ),
-            CONF_HARJU_SEND_SERVICE: self._current_value(
-                CONF_HARJU_SEND_SERVICE, DEFAULT_HARJU_SEND_SERVICE
-            ),
-            CONF_RECEIVE_ENTITY: self._current_value(
-                CONF_RECEIVE_ENTITY, DEFAULT_RECEIVE_ENTITY
+            CONF_TRANSMIT_SERVICE: self._current_value(
+                CONF_TRANSMIT_SERVICE, DEFAULT_TRANSMIT_SERVICE
             ),
             CONF_TRANSMITTER_ID: self._current_value(
                 CONF_TRANSMITTER_ID, DEFAULT_TRANSMITTER_ID
@@ -167,8 +170,7 @@ class ESP32RFBridgeOptionsFlow(config_entries.OptionsFlow):
                 include_name=False,
                 send_service_options=_service_options(
                     self.hass,
-                    defaults[CONF_SEND_SERVICE],
-                    defaults[CONF_HARJU_SEND_SERVICE],
+                    defaults[CONF_TRANSMIT_SERVICE],
                 ),
             ),
             errors=errors,
@@ -193,31 +195,19 @@ def _data_schema(
     schema: dict[Any, Any] = {}
     if include_name:
         schema[vol.Required(CONF_NAME, default=defaults[CONF_NAME])] = cv.string
-    schema[vol.Required(CONF_SEND_SERVICE, default=defaults[CONF_SEND_SERVICE])] = (
+    schema[
+        vol.Required(
+            CONF_TRANSMIT_SERVICE, default=defaults[CONF_TRANSMIT_SERVICE]
+        )
+    ] = (
         selector.SelectSelector(
             selector.SelectSelectorConfig(
-                options=send_service_options or [defaults[CONF_SEND_SERVICE]],
+                options=send_service_options or [defaults[CONF_TRANSMIT_SERVICE]],
                 custom_value=True,
                 mode=selector.SelectSelectorMode.DROPDOWN,
                 sort=True,
             )
         )
-    )
-    schema[
-        vol.Required(
-            CONF_HARJU_SEND_SERVICE,
-            default=defaults[CONF_HARJU_SEND_SERVICE],
-        )
-    ] = selector.SelectSelector(
-        selector.SelectSelectorConfig(
-            options=send_service_options or [defaults[CONF_HARJU_SEND_SERVICE]],
-            custom_value=True,
-            mode=selector.SelectSelectorMode.DROPDOWN,
-            sort=True,
-        )
-    )
-    schema[vol.Required(CONF_RECEIVE_ENTITY, default=defaults[CONF_RECEIVE_ENTITY])] = (
-        selector.EntitySelector()
     )
     schema[
         vol.Required(CONF_TRANSMITTER_ID, default=defaults[CONF_TRANSMITTER_ID])
@@ -238,6 +228,7 @@ def _service_options(hass: Any, *current: str) -> list[str]:
         for service in domain_services
     }
     options.update(current)
+    options.add(DEFAULT_TRANSMIT_SERVICE)
     options.add(DEFAULT_SEND_SERVICE)
     options.add(DEFAULT_HARJU_SEND_SERVICE)
     return sorted(options)
@@ -253,15 +244,7 @@ def _validate_input(user_input: dict[str, Any]) -> dict[str, str]:
     except ProtocolError:
         errors[CONF_TRANSMITTER_ID] = "invalid_transmitter_id"
 
-    if "." not in user_input[CONF_SEND_SERVICE]:
-        errors[CONF_SEND_SERVICE] = "invalid_service"
-    if "." not in user_input[CONF_HARJU_SEND_SERVICE]:
-        errors[CONF_HARJU_SEND_SERVICE] = "invalid_service"
-
-    receive_entity = user_input.get(CONF_RECEIVE_ENTITY, "")
-    try:
-        cv.entity_id(receive_entity)
-    except vol.Invalid:
-        errors[CONF_RECEIVE_ENTITY] = "invalid_entity_id"
+    if "." not in user_input[CONF_TRANSMIT_SERVICE]:
+        errors[CONF_TRANSMIT_SERVICE] = "invalid_service"
 
     return errors

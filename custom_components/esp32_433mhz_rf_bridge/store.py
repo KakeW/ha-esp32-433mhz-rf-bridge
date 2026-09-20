@@ -9,7 +9,13 @@ from uuid import uuid4
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
-from .const import DEFAULT_SEND_SERVICE, PROTOCOL_NEXA, STORAGE_KEY, STORAGE_VERSION
+from .const import (
+    DEFAULT_SEND_SERVICE,
+    PROTOCOL_NEXA,
+    STORAGE_KEY,
+    STORAGE_SCHEMA_VERSION,
+    STORAGE_VERSION,
+)
 
 
 @dataclass
@@ -77,7 +83,10 @@ class RFStore:
         """Persist switch records."""
 
         await self._store.async_save(
-            {"switches": [asdict(record) for record in self.records.values()]}
+            {
+                "schema_version": STORAGE_SCHEMA_VERSION,
+                "switches": [asdict(record) for record in self.records.values()],
+            }
         )
 
     def next_channel(self, first_channel: int) -> int:

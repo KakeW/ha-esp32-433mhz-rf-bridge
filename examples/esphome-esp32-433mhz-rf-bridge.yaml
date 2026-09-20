@@ -23,12 +23,21 @@ globals:
     type: bool
     restore_value: no
     initial_value: "false"
+  - id: last_published_rf_code
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: last_published_rf_millis
+    type: uint32_t
+    restore_value: no
+    initial_value: "0"
 
 text_sensor:
   - platform: template
-    id: last_rf_code
-    name: "Last RF code"
-    update_interval: never
+    id: bridge_api_version
+    name: "Bridge API version"
+    lambda: return {"2"};
+    update_interval: 60s
     entity_category: diagnostic
   - platform: template
     id: rf_debug
@@ -47,52 +56,95 @@ api:
     key: !secret esp32_433mhz_rf_bridge_api_key
 
   actions:
+    - action: transmit_rf
+      variables:
+        protocol: string
+        code: string
+      then:
+        - script.execute:
+            id: transmit_rf_command
+            protocol: !lambda return protocol;
+            code: !lambda return code;
+
+    # V1 compatibility aliases. Remove only after every HA installation using
+    # this bridge has migrated to the unified V2 action above.
     - action: send_nexa_rf_code
       variables:
         code: string
       then:
-        - remote_transmitter.transmit_raw:
-            code: !lambda |-
-              std::vector<int32_t> raw;
-              raw.push_back(260);
-              raw.push_back(-2890);
-
-              for (char c : code) {
-                uint8_t value;
-                if (c >= '0' && c <= '9') {
-                  value = c - '0';
-                } else if (c >= 'A' && c <= 'F') {
-                  value = c - 'A' + 10;
-                } else if (c >= 'a' && c <= 'f') {
-                  value = c - 'a' + 10;
-                } else {
-                  continue;
-                }
-
-                for (int bit = 3; bit >= 0; bit--) {
-                  raw.push_back(230);
-                  raw.push_back((value & (1 << bit)) ? -1440 : -350);
-                }
-              }
-
-              raw.push_back(230);
-              raw.push_back(-10100);
-              return raw;
-            repeat:
-              times: 5
-              wait_time: 0ms
+        - script.execute:
+            id: transmit_rf_command
+            protocol: "nexa"
+            code: !lambda return code;
 
     - action: send_harju_rf_code
       variables:
         code: string
       then:
-        - remote_transmitter.transmit_rc_switch_raw:
-            code: !lambda |-
-              return code;
-            protocol: 4
-            repeat:
-              times: 8
-              wait_time: 0ms
+        - script.execute:
+            id: transmit_rf_command
+            protocol: "harju"
+            code: !lambda return code;
+
+script:
+  - id: transmit_rf_command
+    mode: queued
+    max_runs: 16
+    parameters:
+      protocol: string
+      code: string
+    then:
+      - if:
+          condition:
+            lambda: |-
+              if (protocol != "nexa" || code.size() != 16) return false;
+              for (char value : code) {
+                if (!((value >= '0' && value <= '9') ||
+                      (value >= 'A' && value <= 'F') ||
+                      (value >= 'a' && value <= 'f'))) return false;
+              }
+              return true;
+          then:
+            - remote_transmitter.transmit_raw:
+                code: !lambda |-
+                  std::vector<int32_t> raw;
+                  raw.push_back(260);
+                  raw.push_back(-2890);
+                  for (char c : code) {
+                    uint8_t value = c <= '9'
+                      ? c - '0'
+                      : (c <= 'F' ? c - 'A' + 10 : c - 'a' + 10);
+                    for (int bit = 3; bit >= 0; bit--) {
+                      raw.push_back(230);
+                      raw.push_back((value & (1 << bit)) ? -1440 : -350);
+                    }
+                  }
+                  raw.push_back(230);
+                  raw.push_back(-10100);
+                  return raw;
+                repeat:
+                  times: 5
+                  wait_time: 0ms
+          else:
+            - if:
+                condition:
+                  lambda: |-
+                    if (protocol != "harju" || code.size() != 24) return false;
+                    for (char value : code) {
+                      if (value != '0' && value != '1') return false;
+                    }
+                    return true;
+                then:
+                  - remote_transmitter.transmit_rc_switch_raw:
+                      code: !lambda return code;
+                      protocol: 4
+                      repeat:
+                        times: 8
+                        wait_time: 0ms
+                else:
+                  - logger.log:
+                      level: ERROR
+                      format: "Rejected RF command: unsupported protocol or invalid code"
 
 ota:
   - platform: esphome
@@ -115,8 +167,8 @@ cc1101:
   modulation_type: ASK/OOK
 
 remote_receiver:
+  # GPIO2 is intentional because the CC1101 is soldered to it.
   pin: GPIO2
-  dump: all
   rmt_symbols: 48
   receive_symbols: 192
 
@@ -128,96 +180,22 @@ remote_receiver:
           snprintf(status, sizeof(status), "Raw pulses: %u", (unsigned) x.size());
           id(rf_debug_status) = std::string(status);
 
-          auto abs_duration = [](int value) -> int {
-            return value < 0 ? -value : value;
-          };
-          auto is_short = [](int value) -> bool {
-            return value >= 150 && value <= 700;
-          };
-          auto is_long = [](int value) -> bool {
-            return value >= 800 && value <= 1700;
-          };
-          auto is_sync_space = [](int value) -> bool {
-            return value >= 1800 && value <= 3200;
-          };
-
-          // Harju remote repeats the same 24-bit frame several times. ESPHome's
-          // rc_switch dump may report a minority fragment, so decode all raw
-          // frames and use the most common one.
-          if (x.size() >= 300) {
-            std::vector<std::string> frames;
-            for (size_t i = 0; i + 49 < x.size(); i += 2) {
-              int sync_mark = abs_duration(x[i]);
-              int sync_space = abs_duration(x[i + 1]);
-              if (!is_short(sync_mark) || !is_sync_space(sync_space)) {
-                continue;
-              }
-
-              std::string bits;
-              bool ok = true;
-              for (size_t bit = 0; bit < 24; bit++) {
-                int mark = abs_duration(x[i + 2 + bit * 2]);
-                int space = abs_duration(x[i + 3 + bit * 2]);
-                if (is_long(mark) && is_short(space)) {
-                  bits.push_back('1');
-                } else if (is_short(mark) && is_long(space)) {
-                  bits.push_back('0');
-                } else {
-                  ok = false;
-                  break;
-                }
-              }
-
-              if (ok) {
-                frames.push_back(bits);
-                i += 48;
-              }
-            }
-
-            std::string best_code;
-            size_t best_count = 0;
-            for (const auto &candidate : frames) {
-              size_t count = 0;
-              for (const auto &other : frames) {
-                if (other == candidate) {
-                  count++;
-                }
-              }
-              if (count > best_count) {
-                best_code = candidate;
-                best_count = count;
-              }
-            }
-
-            if (best_count >= 2) {
-              id(decoded_rf_code) = best_code;
-              id(decoded_rf_code_valid) = true;
-              snprintf(status, sizeof(status), "Harju raw: %s (%u/%u)",
-                       best_code.c_str(), (unsigned) best_count,
-                       (unsigned) frames.size());
-              id(rf_debug_status) = std::string(status);
-              return;
-            }
-          }
-
           if (x.size() < 128) {
-            snprintf(status, sizeof(status), "Too short: %u pulses", (unsigned) x.size());
+            snprintf(status, sizeof(status), "Nexa: too short (%u pulses)",
+                     (unsigned) x.size());
             id(rf_debug_status) = std::string(status);
             return;
           }
 
           size_t start = 0;
           int first_space = x[1] < 0 ? -x[1] : x[1];
-          if (first_space > 2000) {
-            start = 2;
-          }
+          if (first_space > 2000) start = 2;
           if (x.size() - start < 128) {
-            snprintf(status, sizeof(status), "Too short after sync: %u pulses", (unsigned) (x.size() - start));
-            id(rf_debug_status) = std::string(status);
+            id(rf_debug_status) = "Nexa: incomplete frame after sync";
             return;
           }
 
-          uint64_t code = 0;
+          uint64_t decoded = 0;
           for (size_t bit = 0; bit < 64; bit++) {
             int mark = x[start + bit * 2];
             int space = x[start + bit * 2 + 1];
@@ -225,54 +203,60 @@ remote_receiver:
             space = space < 0 ? -space : space;
 
             if (mark < 100 || mark > 500) {
-              if (bit == 0 && mark > 800) {
-                id(rf_debug_status) = "RCSwitch code handled separately";
-                return;
-              }
-              snprintf(status, sizeof(status), "Nexa: invalid mark at bit %u: %d us", (unsigned) bit, mark);
+              snprintf(status, sizeof(status),
+                       "Nexa: invalid mark at bit %u: %d us",
+                       (unsigned) bit, mark);
               id(rf_debug_status) = std::string(status);
               return;
             }
 
-            code <<= 1;
-            if (space > 800) {
-              code |= 1;
+            decoded <<= 1;
+            if (space > 800 && space <= 1700) {
+              decoded |= 1;
             } else if (space < 150 || space > 700) {
-              snprintf(status, sizeof(status), "Nexa: invalid space at bit %u: %d us", (unsigned) bit, space);
+              snprintf(status, sizeof(status),
+                       "Nexa: invalid space at bit %u: %d us",
+                       (unsigned) bit, space);
               id(rf_debug_status) = std::string(status);
               return;
             }
           }
 
           char buffer[17];
-          snprintf(buffer, sizeof(buffer), "%016llX", (unsigned long long) code);
+          snprintf(buffer, sizeof(buffer), "%016llX",
+                   (unsigned long long) decoded);
           id(decoded_rf_code) = std::string(buffer);
+
+          const uint32_t now = millis();
+          if (id(decoded_rf_code) == id(last_published_rf_code) &&
+              now - id(last_published_rf_millis) < 250) {
+            id(rf_debug_status) = "Nexa: duplicate repeat ignored";
+            return;
+          }
+
+          id(last_published_rf_code) = id(decoded_rf_code);
+          id(last_published_rf_millis) = now;
           id(decoded_rf_code_valid) = true;
           id(rf_debug_status) = "OK: " + id(decoded_rf_code);
       - text_sensor.template.publish:
           id: rf_debug
-          state: !lambda "return id(rf_debug_status);"
+          state: !lambda return id(rf_debug_status);
       - if:
           condition:
-            lambda: "return id(decoded_rf_code_valid);"
+            lambda: return id(decoded_rf_code_valid);
           then:
-            - text_sensor.template.publish:
-                id: last_rf_code
-                state: !lambda |-
-                  return id(decoded_rf_code) + " @ " + std::to_string(millis());
             - homeassistant.action:
                 action: esp32_433mhz_rf_bridge.receive_code
                 data_template:
                   code: "{{ code }}"
                 variables:
-                  code: !lambda |-
-                    return id(decoded_rf_code);
+                  code: !lambda return id(decoded_rf_code);
 
 remote_transmitter:
   pin: GPIO3
   carrier_duty_percent: 100%
   rmt_symbols: 48
-  non_blocking: true
+  non_blocking: false
 
   on_transmit:
     then:

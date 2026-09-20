@@ -25,6 +25,8 @@ from .const import (
     ATTR_ON_CODE,
     ATTR_PROTOCOL,
     ATTR_SWITCH_ID,
+    CONF_TRANSMIT_SERVICE,
+    DEFAULT_TRANSMIT_SERVICE,
     DOMAIN,
     LEARN_OFF,
     LEARN_ON,
@@ -77,7 +79,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async def async_send_code(call: ServiceCall) -> None:
         hub = _get_first_loaded_hub(hass)
         try:
-            await hub.async_send_code(call.data[ATTR_CODE])
+            await hub.async_send_code(
+                call.data[ATTR_CODE],
+                protocol=call.data.get(ATTR_PROTOCOL, PROTOCOL_NEXA),
+            )
         except ProtocolError as err:
             raise HomeAssistantError(str(err)) from err
 
@@ -119,7 +124,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         DOMAIN,
         SERVICE_SEND_CODE,
         async_send_code,
-        schema=vol.Schema({vol.Required(ATTR_CODE): cv.string}),
+        schema=vol.Schema(
+            {
+                vol.Required(ATTR_CODE): cv.string,
+                vol.Optional(ATTR_PROTOCOL, default=PROTOCOL_NEXA): vol.In(
+                    [PROTOCOL_NEXA, PROTOCOL_HARJU]
+                ),
+            }
+        ),
     )
     return True
 
@@ -135,6 +147,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ESP32RFBridgeConfigEntry
     await hass.config_entries.async_forward_entry_setups(
         entry, [Platform(platform) for platform in PLATFORMS]
     )
+    return True
+
+
+async def async_migrate_entry(
+    hass: HomeAssistant, entry: ESP32RFBridgeConfigEntry
+) -> bool:
+    """Migrate a V1 config entry without changing stored outlets or entity IDs."""
+
+    if entry.version > 2:
+        LOGGER.error("Cannot migrate config entry from version %s", entry.version)
+        return False
+    if entry.version == 2:
+        return True
+
+    data = dict(entry.data)
+    data.setdefault(CONF_TRANSMIT_SERVICE, DEFAULT_TRANSMIT_SERVICE)
+    hass.config_entries.async_update_entry(entry, data=data, version=2)
     return True
 
 

@@ -24,12 +24,14 @@ from .const import (
     CONF_HARJU_SEND_SERVICE,
     CONF_RECEIVE_ENTITY,
     CONF_SEND_SERVICE,
+    CONF_TRANSMIT_SERVICE,
     CONF_TRANSMITTER_ID,
     DEFAULT_HARJU_SEND_SERVICE,
     DEFAULT_FIRST_CHANNEL,
     DEFAULT_RECEIVE_ENTITY,
     DEFAULT_SEND_SERVICE,
     DEFAULT_SWITCH_PROTOCOL,
+    DEFAULT_TRANSMIT_SERVICE,
     DEFAULT_TRANSMITTER_ID,
     DOMAIN,
     EVENT_RF_RECEIVED,
@@ -354,21 +356,35 @@ class ESP32RFBridgeHub:
         return record
 
     async def async_send_code(
-        self, code: str, send_service: str | None = None
+        self,
+        code: str,
+        send_service: str | None = None,
+        protocol: str = PROTOCOL_NEXA,
     ) -> None:
         """Send an RF code through the configured ESPHome action."""
 
         normalized = normalize_rf_code(code)
+        transmit_service = str(
+            self._entry_value(CONF_TRANSMIT_SERVICE, DEFAULT_TRANSMIT_SERVICE)
+        )
+        if self._service_exists(transmit_service):
+            domain, service = self._split_service_ref(transmit_service)
+            await self.hass.services.async_call(
+                domain,
+                service,
+                {ATTR_PROTOCOL: protocol, ATTR_CODE: normalized},
+                blocking=True,
+            )
+            return
+
+        # V1 firmware fallback. These protocol-specific actions remain supported
+        # during the transition, so upgrading HA does not require a coordinated
+        # firmware flash.
         service_ref = send_service or self._entry_value(
             CONF_SEND_SERVICE, DEFAULT_SEND_SERVICE
         )
         service_ref = self._resolve_send_service(str(service_ref))
-        try:
-            domain, service = str(service_ref).split(".", 1)
-        except ValueError as err:
-            raise HomeAssistantError(
-                "send_service must use the format domain.service"
-            ) from err
+        domain, service = self._split_service_ref(str(service_ref))
 
         await self.hass.services.async_call(
             domain,
@@ -376,6 +392,26 @@ class ESP32RFBridgeHub:
             {ATTR_CODE: normalized},
             blocking=True,
         )
+
+    def _service_exists(self, service_ref: str) -> bool:
+        """Return whether a configured Home Assistant action is registered."""
+
+        try:
+            domain, service = self._split_service_ref(service_ref)
+        except HomeAssistantError:
+            return False
+        return self.hass.services.has_service(domain, service)
+
+    @staticmethod
+    def _split_service_ref(service_ref: str) -> tuple[str, str]:
+        """Split a Home Assistant action reference."""
+
+        parts = service_ref.split(".", 1)
+        if len(parts) != 2 or not all(parts):
+            raise HomeAssistantError(
+                "ESPHome action must use the format domain.service"
+            )
+        return parts[0], parts[1]
 
     def _resolve_send_service(self, configured_service: str) -> str:
         """Prefer the current English ESPHome action, with legacy fallbacks."""
@@ -441,7 +477,7 @@ class ESP32RFBridgeHub:
         )
         send_service = self._configured_send_service_for_record(record)
         for code in send_codes:
-            await self.async_send_code(code, send_service)
+            await self.async_send_code(code, send_service, record.protocol)
         await self.async_set_record_state(record, is_on)
 
     def _configured_send_service_for_record(self, record: SwitchRecord) -> str:
